@@ -15,12 +15,12 @@
 #define M_PI 3.14159265358f
 #define M_PI_4 0.62831853071f
 
-struct Lines_Vector {
+struct Vert_Vec {
     float verticies[VERT_CAP];
     unsigned int size;
 };
 
-void vec_push(Lines_Vector *vec, float x, float y, float dx, float dy)
+void vec_push(Vert_Vec *vec, float x, float y, float dx, float dy)
 {
     assert(vec->size < VERT_CAP);
     
@@ -32,7 +32,7 @@ void vec_push(Lines_Vector *vec, float x, float y, float dx, float dy)
     vec->size += 4;
 }
 
-void tree(float x, float y, float len, float angle, unsigned int curr_depth, Lines_Vector *vec)
+void tree(float x, float y, float len, float angle, unsigned int curr_depth, Vert_Vec *vec)
 {
     if (curr_depth == 0 || len < 1.0f) return;
     
@@ -89,7 +89,7 @@ int main(int argc, char **argv)
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
-    Lines_Vector lines = {0};
+    Vert_Vec lines = {0};
     tree(640.0f, 720.0f, 150.0f, -M_PI * 0.5f, DEPTH, &lines);
 
     glBufferData(GL_ARRAY_BUFFER, sizeof(lines.verticies), lines.verticies, GL_STATIC_DRAW);
