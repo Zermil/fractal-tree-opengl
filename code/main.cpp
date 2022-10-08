@@ -32,7 +32,7 @@ static const char *fragment_shader =
     "}";
 
 typedef struct {
-    float verticies[VERT_CAP];
+    float *verticies;
     unsigned int size;
 } Vert_Vec;
 
@@ -116,6 +116,9 @@ int main(int argc, char **argv)
     glDeleteShader(vert);
     glDeleteShader(frag);
     
+    glUseProgram(shader_program);
+    glUniform2f(glGetUniformLocation(shader_program, "resolution"), WIDTH, HEIGHT);
+    
     // Render
     unsigned int VAO, VBO;
     glGenVertexArrays(1, &VAO);
@@ -125,21 +128,27 @@ int main(int argc, char **argv)
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
     Vert_Vec lines = {0};
+    lines.verticies = (float *) malloc(VERT_CAP * sizeof(float));
+
+    if (lines.verticies == NULL) {
+        fprintf(stderr, "Could not allocate enough memory for verticies, consider lowering the DEPTH!\n");
+        exit(1);
+    }
+    
     tree(640.0f, 720.0f, 150.0f, -M_PI * 0.5f, DEPTH, &lines);
 
-    glBufferData(GL_ARRAY_BUFFER, sizeof(lines.verticies), lines.verticies, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, VERT_CAP * sizeof(float), lines.verticies, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+    
     while (!glfwWindowShouldClose(window)) {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUseProgram(shader_program);
-        glUniform2f(glGetUniformLocation(shader_program, "resolution"), WIDTH, HEIGHT);
         glBindVertexArray(VAO);
         glDrawArrays(GL_LINES, 0, VERT_CAP);
         
@@ -147,6 +156,8 @@ int main(int argc, char **argv)
         glfwPollEvents();
     }
 
+    free(lines.verticies);
+    
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteProgram(shader_program);
