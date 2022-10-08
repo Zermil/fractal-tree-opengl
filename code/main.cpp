@@ -31,10 +31,10 @@ static const char *fragment_shader =
     "  frag_color = vec4(1.0, 1.0, 1.0, 1.0);\n"
     "}";
 
-struct Vert_Vec {
+typedef struct {
     float verticies[VERT_CAP];
     unsigned int size;
-};
+} Vert_Vec;
 
 void vec_push(Vert_Vec *vec, float x, float y, float dx, float dy)
 {
