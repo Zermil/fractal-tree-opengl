@@ -3,4 +3,11 @@
 *.ilk
 *.pdb
 *.txt
+*.sln
+
+build/*
+.vs/
+fractal-tree-opengl/
+
 !LICENSE.txt
+!build/.gitkeep
