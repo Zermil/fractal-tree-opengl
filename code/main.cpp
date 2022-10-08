@@ -12,8 +12,8 @@
 #define HEIGHT 720
 #define DEPTH 10
 #define VERT_CAP (((1 << DEPTH) - 1) * 4)
-#define M_PI 3.14159265358f
-#define M_PI_4 0.62831853071f
+#define FRAC_PI 3.14159265358f
+#define FRAC_PI_5 0.62831853071f
 
 static const char *vertex_shader =
     "#version 330\n"
@@ -57,8 +57,8 @@ void tree(float x, float y, float len, float angle, unsigned int curr_depth, Ver
     vec_push(vec, x, y, dx, dy);
 
     float dlen = len * 0.75f;
-    tree(dx, dy, dlen, angle - M_PI_4, curr_depth - 1, vec);
-    tree(dx, dy, dlen, angle + M_PI_4, curr_depth - 1, vec);
+    tree(dx, dy, dlen, angle - FRAC_PI_5, curr_depth - 1, vec);
+    tree(dx, dy, dlen, angle + FRAC_PI_5, curr_depth - 1, vec);
 }
 
 GLFWwindow* create_window(unsigned int width, unsigned int height, const char* title)
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
         exit(1);
     }
     
-    tree(640.0f, 720.0f, 150.0f, -M_PI * 0.5f, DEPTH, &lines);
+    tree(640.0f, 720.0f, 150.0f, -FRAC_PI * 0.5f, DEPTH, &lines);
 
     glBufferData(GL_ARRAY_BUFFER, VERT_CAP * sizeof(float), lines.verticies, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
@@ -144,7 +144,6 @@ int main(int argc, char **argv)
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    
     while (!glfwWindowShouldClose(window)) {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
