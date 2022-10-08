@@ -15,6 +15,22 @@
 #define M_PI 3.14159265358f
 #define M_PI_4 0.62831853071f
 
+static const char *vertex_shader =
+    "#version 330\n"
+    "layout (location = 0) in vec2 aPos;\n"
+    "uniform vec2 resolution;\n"
+    "void main() {\n"
+    "  vec2 pos = (aPos / resolution) * 2.0 - 1.0;\n"
+    "  gl_Position = vec4(pos.x, -pos.y, 0.0, 1.0);\n"
+    "}";
+
+static const char *fragment_shader =
+    "#version 330\n"
+    "out vec4 frag_color;\n"
+    "void main() {\n"
+    "  frag_color = vec4(1.0, 1.0, 1.0, 1.0);\n"
+    "}";
+
 struct Vert_Vec {
     float verticies[VERT_CAP];
     unsigned int size;
@@ -51,8 +67,8 @@ GLFWwindow* create_window(unsigned int width, unsigned int height, const char* t
     
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 
     GLFWwindow *window = glfwCreateWindow(width, height, title, NULL, NULL);
     
@@ -80,8 +96,27 @@ int main(int argc, char **argv)
     UNUSED(argv);
 
     GLFWwindow *window = create_window(WIDTH, HEIGHT, "Hello, Sailor!");
-    glOrtho(0.0, WIDTH, HEIGHT, 0.0, -1.0, 1.0);
 
+    // Shader
+    unsigned int vert = glCreateShader(GL_VERTEX_SHADER);
+    unsigned int frag = glCreateShader(GL_FRAGMENT_SHADER);
+
+    glShaderSource(vert, 1, &vertex_shader, NULL);
+    glCompileShader(vert);
+
+    glShaderSource(frag, 1, &fragment_shader, NULL);
+    glCompileShader(frag);
+
+    unsigned int shader_program = glCreateProgram();
+
+    glAttachShader(shader_program, vert);
+    glAttachShader(shader_program, frag);
+    glLinkProgram(shader_program);
+    
+    glDeleteShader(vert);
+    glDeleteShader(frag);
+    
+    // Render
     unsigned int VAO, VBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -103,6 +138,8 @@ int main(int argc, char **argv)
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        glUseProgram(shader_program);
+        glUniform2f(glGetUniformLocation(shader_program, "resolution"), WIDTH, HEIGHT);
         glBindVertexArray(VAO);
         glDrawArrays(GL_LINES, 0, VERT_CAP);
         
@@ -112,6 +149,7 @@ int main(int argc, char **argv)
 
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
+    glDeleteProgram(shader_program);
     
     glfwDestroyWindow(window);
     glfwTerminate();
