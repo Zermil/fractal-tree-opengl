@@ -19,16 +19,21 @@ static const char *vertex_shader =
     "#version 330\n"
     "layout (location = 0) in vec2 aPos;\n"
     "uniform vec2 resolution;\n"
+    "out vec2 oPos;\n"
     "void main() {\n"
     "  vec2 pos = (aPos / resolution) * 2.0 - 1.0;\n"
     "  gl_Position = vec4(pos.x, -pos.y, 0.0, 1.0);\n"
+    "  oPos = vec2(pos.x, -pos.y);\n"
     "}";
 
 static const char *fragment_shader =
     "#version 330\n"
     "out vec4 frag_color;\n"
+    "in vec2 oPos;\n"
     "void main() {\n"
-    "  frag_color = vec4(1.0, 1.0, 1.0, 1.0);\n"
+    "  float r = clamp(oPos.y + 0.20, 0.0, 1.0);\n"
+    "  float b = clamp(oPos.y - 0.30, 0.0, 1.0);\n"
+    "  frag_color = vec4(r, 0.60, b, 1.0);\n"
     "}";
 
 typedef struct {
