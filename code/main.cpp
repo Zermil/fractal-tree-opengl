@@ -43,7 +43,7 @@ typedef struct {
 
 void vec_push(Vert_Vec *vec, float x, float y, float dx, float dy)
 {
-    assert(vec->size < VERT_CAP);
+    assert(vec->size + 3 < VERT_CAP);
     
     vec->verticies[vec->size + 0] = x;
     vec->verticies[vec->size + 1] = y;
