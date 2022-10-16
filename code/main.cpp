@@ -11,11 +11,15 @@
 #define WIDTH 1280
 #define HEIGHT 720
 #define DEPTH 10
-#define VERT_CAP (((1 << DEPTH) - 1) * 4)
+#define VERT_CAP (1 << DEPTH)
+#define IND_CAP (VERT_CAP - 1)
 #define FRAC_PI 3.14159265358f
 #define FRAC_PI_5 0.62831853071f
+#define STACK_CAP 256
 
-static const char *vertex_shader =
+#define internal static
+
+internal const char *vertex_shader =
     "#version 330\n"
     "layout (location = 0) in vec2 aPos;\n"
     "uniform vec2 resolution;\n"
@@ -26,7 +30,7 @@ static const char *vertex_shader =
     "  oPos = vec2(pos.x, -pos.y);\n"
     "}";
 
-static const char *fragment_shader =
+internal const char *fragment_shader =
     "#version 330\n"
     "out vec4 frag_color;\n"
     "in vec2 oPos;\n"
@@ -37,36 +41,99 @@ static const char *fragment_shader =
     "}";
 
 typedef struct {
-    float *verticies;
+    unsigned int data[STACK_CAP];
     unsigned int size;
+} Stack;
+
+typedef struct {
+    float x;
+    float y;
+} Vec2;
+
+typedef struct {
+    unsigned int a;
+    unsigned int b;
+} Line;
+
+typedef struct {
+    Vec2 *vertices;
+    unsigned int vert_size;
+
+    Line *indices;
+    unsigned int ind_size;
 } Vert_Vec;
 
-void vec_push(Vert_Vec *vec, float x, float y, float dx, float dy)
+internal void stack_push(Stack *stack, unsigned int x)
 {
-    assert(vec->size + 3 < VERT_CAP);
+    assert(stack->size < STACK_CAP);
     
-    vec->verticies[vec->size + 0] = x;
-    vec->verticies[vec->size + 1] = y;
-    vec->verticies[vec->size + 2] = dx;
-    vec->verticies[vec->size + 3] = dy;
-    
-    vec->size += 4;
+    stack->data[stack->size] = x;
+    stack->size += 1;
 }
 
-void tree(float x, float y, float len, float angle, unsigned int curr_depth, Vert_Vec *vec)
+internal unsigned int stack_top(Stack *stack)
+{
+    assert(stack->size > 0);
+    
+    return(stack->data[stack->size - 1]);
+}
+
+internal void stack_pop(Stack *stack)
+{
+    assert(stack->size > 0);
+    
+    stack->size -= 1;
+}
+
+internal unsigned int append_vertex(Vert_Vec *vec, float x, float y)
+{
+    assert(vec->vert_size < VERT_CAP);
+
+    unsigned int idx = vec->vert_size;
+    
+    vec->vertices[vec->vert_size] = {x, y};
+    vec->vert_size += 1;
+
+    return(idx);
+}
+
+internal void append_line(Vert_Vec *vec, unsigned int a, unsigned int b)
+{
+    assert(vec->ind_size < IND_CAP);
+    
+    vec->indices[vec->ind_size] = {a, b};
+    vec->ind_size += 1;
+}
+
+internal void tree(float x, float y, float len, float angle, unsigned int curr_depth, Stack *stack, Vert_Vec *vec)
 {
     if (curr_depth == 0 || len < 1.0f) return;
-    
+
     float dx = x + (len * cosf(angle));
     float dy = y + (len * sinf(angle));
-    vec_push(vec, x, y, dx, dy);
-
     float dlen = len * 0.75f;
-    tree(dx, dy, dlen, angle - FRAC_PI_5, curr_depth - 1, vec);
-    tree(dx, dy, dlen, angle + FRAC_PI_5, curr_depth - 1, vec);
+
+    if (DEPTH == curr_depth) {
+        unsigned int a = append_vertex(vec, x, y);
+        unsigned int b = append_vertex(vec, dx, dy);
+
+        append_line(vec, a, b);
+        stack_push(stack, b);
+    } else {
+        unsigned int a = stack_top(stack);
+        unsigned int b = append_vertex(vec, dx, dy);
+        
+        append_line(vec, a, b);
+        stack_push(stack, b);
+    }
+    
+    tree(dx, dy, dlen, angle - FRAC_PI_5, curr_depth - 1, stack, vec);
+    tree(dx, dy, dlen, angle + FRAC_PI_5, curr_depth - 1, stack, vec);
+    
+    stack_pop(stack);
 }
 
-GLFWwindow* create_window(unsigned int width, unsigned int height, const char* title)
+internal GLFWwindow* create_window(unsigned int width, unsigned int height, const char *title)
 {
     glfwInit();
     
@@ -133,17 +200,19 @@ int main(int argc, char **argv)
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
 
     Vert_Vec lines = {0};
-    lines.verticies = (float *) malloc(VERT_CAP * sizeof(float));
+    Stack stack = {0};
+    lines.vertices = (Vec2 *) malloc(VERT_CAP * sizeof(Vec2));
+    lines.indices = (Line *) malloc(IND_CAP * sizeof(Line));
 
-    if (lines.verticies == NULL) {
+    if (lines.vertices == NULL || lines.indices == NULL) {
         fprintf(stderr, "Could not allocate enough memory for verticies, consider lowering the DEPTH!\n");
         exit(1);
     }
     
-    tree(640.0f, 720.0f, 150.0f, -FRAC_PI * 0.5f, DEPTH, &lines);
+    tree(640.0f, 720.0f, 150.0f, -FRAC_PI * 0.5f, DEPTH, &stack, &lines);
 
-    glBufferData(GL_ARRAY_BUFFER, VERT_CAP * sizeof(float), lines.verticies, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glBufferData(GL_ARRAY_BUFFER, VERT_CAP * sizeof(Vec2), lines.vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vec2), (void*)offsetof(Vert_Vec, vertices));
     glEnableVertexAttribArray(0);
     
     glBindVertexArray(0);
@@ -154,13 +223,14 @@ int main(int argc, char **argv)
         glClear(GL_COLOR_BUFFER_BIT);
 
         glBindVertexArray(VAO);
-        glDrawArrays(GL_LINES, 0, VERT_CAP);
+        glDrawElements(GL_LINES, IND_CAP * 2, GL_UNSIGNED_INT, lines.indices);
         
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    free(lines.verticies);
+    free(lines.vertices);
+    free(lines.indices);
     
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
