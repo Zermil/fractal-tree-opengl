@@ -4,6 +4,8 @@ Fundamental fractal tree rendered with OpenGL in C/C++ using recursive approach.
 
 It's a demo for people that want to know the "low-level" implementation details, instead of just writing pre-made functions from a framework without much thought behind it.
 
+*colours* branch, apart from implementing colours, also allows for dynamic depth changing. Use Q and W on your keyboard to lower (Q) or raise (W) the depth accordingly.
+
 ## Instruction when building for Visual Studio
 
 Execute `build_vs.bat` script:
