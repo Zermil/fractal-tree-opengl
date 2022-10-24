@@ -10,12 +10,16 @@
 #define UNUSED(x) ((void)(x))
 #define WIDTH 1280
 #define HEIGHT 720
-#define DEPTH 10
-#define VERT_CAP (1 << DEPTH)
+#define MAX_DEPTH 10
+#define VERT_CAP (1 << MAX_DEPTH)
 #define IND_CAP (VERT_CAP - 1)
 #define FRAC_PI 3.14159265358f
 #define FRAC_PI_5 0.62831853071f
 #define STACK_CAP 256
+#define DEFAULT_X 640.0f
+#define DEFAULT_Y 720.0f
+#define DEFAULT_LEN 150.0f
+#define DEFAULT_ANGLE (-FRAC_PI * 0.5f)
 
 #define internal static
 
@@ -63,6 +67,15 @@ typedef struct {
     unsigned int ind_size;
 } Vert_Vec;
 
+typedef struct {
+    Vert_Vec lines;
+    Stack stack;
+    unsigned int depth;
+    
+    unsigned int VAO;
+    unsigned int VBO;
+} Window_Data;
+
 internal void stack_push(Stack *stack, unsigned int x)
 {
     assert(stack->size < STACK_CAP);
@@ -105,7 +118,7 @@ internal void append_line(Vert_Vec *vec, unsigned int a, unsigned int b)
     vec->ind_size += 1;
 }
 
-internal void tree(float x, float y, float len, float angle, unsigned int curr_depth, Stack *stack, Vert_Vec *vec)
+internal void tree_generate(float x, float y, float len, float angle, unsigned int curr_depth, Window_Data *window_data)
 {
     if (curr_depth == 0 || len < 1.0f) return;
 
@@ -113,27 +126,61 @@ internal void tree(float x, float y, float len, float angle, unsigned int curr_d
     float dy = y + (len * sinf(angle));
     float dlen = len * 0.75f;
 
-    if (DEPTH == curr_depth) {
-        unsigned int a = append_vertex(vec, x, y);
-        unsigned int b = append_vertex(vec, dx, dy);
+    if (window_data->depth == curr_depth) {
+        unsigned int a = append_vertex(&window_data->lines, x, y);
+        unsigned int b = append_vertex(&window_data->lines, dx, dy);
 
-        append_line(vec, a, b);
-        stack_push(stack, b);
+        append_line(&window_data->lines, a, b);
+        stack_push(&window_data->stack, b);
     } else {
-        unsigned int a = stack_top(stack);
-        unsigned int b = append_vertex(vec, dx, dy);
+        unsigned int a = stack_top(&window_data->stack);
+        unsigned int b = append_vertex(&window_data->lines, dx, dy);
         
-        append_line(vec, a, b);
-        stack_push(stack, b);
+        append_line(&window_data->lines, a, b);
+        stack_push(&window_data->stack, b);
     }
     
-    tree(dx, dy, dlen, angle - FRAC_PI_5, curr_depth - 1, stack, vec);
-    tree(dx, dy, dlen, angle + FRAC_PI_5, curr_depth - 1, stack, vec);
+    tree_generate(dx, dy, dlen, angle - FRAC_PI_5, curr_depth - 1, window_data);
+    tree_generate(dx, dy, dlen, angle + FRAC_PI_5, curr_depth - 1, window_data);
     
-    stack_pop(stack);
+    stack_pop(&window_data->stack);
 }
 
-internal GLFWwindow* create_window(unsigned int width, unsigned int height, const char *title)
+internal void tree_render(Window_Data *window_data)
+{
+    glBindVertexArray(window_data->VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, window_data->VBO);
+    
+    glBufferSubData(GL_ARRAY_BUFFER, 0, window_data->lines.vert_size * sizeof(Vec2), window_data->lines.vertices);
+    glDrawElements(GL_LINES, window_data->lines.ind_size * 2, GL_UNSIGNED_INT, window_data->lines.indices);
+}
+
+internal void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods)
+{
+    UNUSED(scancode);
+    UNUSED(mods);
+
+    Window_Data *window_data = (Window_Data *) glfwGetWindowUserPointer(window);
+    window_data->lines.vert_size = 0;
+    window_data->lines.ind_size = 0;
+    window_data->stack = {0};
+    
+    if (action == GLFW_PRESS) {
+        switch (key) {
+            case GLFW_KEY_Q: {
+                if (window_data->depth > 1) window_data->depth -= 1;
+            } break;
+                
+            case GLFW_KEY_W: {
+                if (window_data->depth < MAX_DEPTH) window_data->depth += 1;
+            } break;
+        }
+    }
+
+    tree_generate(DEFAULT_X, DEFAULT_Y, DEFAULT_LEN, DEFAULT_ANGLE, window_data->depth, window_data);
+}
+
+internal GLFWwindow *create_window(unsigned int width, unsigned int height, const char *title)
 {
     glfwInit();
     
@@ -152,13 +199,14 @@ internal GLFWwindow* create_window(unsigned int width, unsigned int height, cons
 
     glfwMakeContextCurrent(window);
 
-    unsigned int err = glewInit();
-    if (GLEW_OK != err) {
-        fprintf(stderr, "[ERROR]: Could not initialize glew: %s\n", glewGetErrorString(err));
+    if (GLEW_OK != glewInit()) {
+        fprintf(stderr, "[ERROR]: Could not initialize GLEW!\n");
         glfwTerminate();
         exit(1);        
     }
 
+    glfwSetKeyCallback(window, key_callback);
+    
     return(window);
 }
 
@@ -192,27 +240,28 @@ int main(int argc, char **argv)
     glUniform2f(glGetUniformLocation(shader_program, "resolution"), WIDTH, HEIGHT);
     
     // Render
-    unsigned int VAO, VBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
+    Window_Data window_data = {0};
+    
+    glGenVertexArrays(1, &window_data.VAO);
+    glGenBuffers(1, &window_data.VBO);
 
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBindVertexArray(window_data.VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, window_data.VBO);
 
-    Vert_Vec lines = {0};
-    Stack stack = {0};
-    lines.vertices = (Vec2 *) malloc(VERT_CAP * sizeof(Vec2));
-    lines.indices = (Line *) malloc(IND_CAP * sizeof(Line));
+    window_data.lines.vertices = (Vec2 *) malloc(VERT_CAP * sizeof(Vec2));
+    window_data.lines.indices = (Line *) malloc(IND_CAP * sizeof(Line));
+    window_data.depth = MAX_DEPTH;
 
-    if (lines.vertices == NULL || lines.indices == NULL) {
+    if (window_data.lines.vertices == NULL || window_data.lines.indices == NULL) {
         fprintf(stderr, "Could not allocate enough memory for verticies, consider lowering the DEPTH!\n");
         exit(1);
     }
     
-    tree(640.0f, 720.0f, 150.0f, -FRAC_PI * 0.5f, DEPTH, &stack, &lines);
+    glfwSetWindowUserPointer(window, &window_data);
+    tree_generate(DEFAULT_X, DEFAULT_Y, DEFAULT_LEN, DEFAULT_ANGLE, window_data.depth, &window_data);
 
-    glBufferData(GL_ARRAY_BUFFER, VERT_CAP * sizeof(Vec2), lines.vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vec2), (void*)offsetof(Vert_Vec, vertices));
+    glBufferData(GL_ARRAY_BUFFER, window_data.lines.vert_size * sizeof(Vec2), window_data.lines.vertices, GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vec2), (void*) offsetof(Vert_Vec, vertices));
     glEnableVertexAttribArray(0);
     
     glBindVertexArray(0);
@@ -222,18 +271,17 @@ int main(int argc, char **argv)
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glBindVertexArray(VAO);
-        glDrawElements(GL_LINES, IND_CAP * 2, GL_UNSIGNED_INT, lines.indices);
+        tree_render(&window_data);
         
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    free(lines.vertices);
-    free(lines.indices);
+    free(window_data.lines.vertices);
+    free(window_data.lines.indices);
     
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
+    glDeleteVertexArrays(1, &window_data.VAO);
+    glDeleteBuffers(1, &window_data.VBO);
     glDeleteProgram(shader_program);
     
     glfwDestroyWindow(window);
