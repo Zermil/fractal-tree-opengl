@@ -12,3 +12,4 @@ fractal-tree-opengl/
 !LICENSE.txt
 !premake5.exe
 !build/.gitkeep
+!CMakeLists.txt
